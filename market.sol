@@ -23,6 +23,10 @@ interface marketPlace{
     
     function createSellOrder(address SOcontract, uint256 SOid, uint256 SOprice) external;
     
+    function fillBuyOrder(uint256 order) external;
+    
+    function fillSellOrder(uint256 order) external;
+    
     function cancelBuyOrder(uint256 order) external;
     
     function cancelSellOrder(uint256 order) external;
@@ -51,7 +55,7 @@ interface marketPlace{
 }
 interface IERC721 {
 
-    function transferFrom(address from, address to, uint256 tokenId) external;
+    function safeTransferFrom(address from, address to, uint256 tokenId) external;
 
 }
 contract NFTmarketplace is marketPlace{
@@ -120,7 +124,7 @@ contract NFTmarketplace is marketPlace{
         NGL.transferFrom(msg.sender, _seller[sellOrder], _SOprice[sellOrder]);
         
         IERC721 NFT = IERC721(_SOcontract[sellOrder]);
-        NFT.transferFrom(address(this), msg.sender, _SOid[sellOrder]);
+        NFT.safeTransferFrom(address(this), msg.sender, _SOid[sellOrder]);
         
         
         _SOprogress[sellOrder] = true;
@@ -130,7 +134,7 @@ contract NFTmarketplace is marketPlace{
         require(!_BOprogress[buyOrder]);
         
         IERC721 NFT = IERC721(_BOcontract[buyOrder]);
-        NFT.transferFrom(msg.sender, _buyer[buyOrder], _BOid[buyOrder]);
+        NFT.safeTransferFrom(msg.sender, _buyer[buyOrder], _BOid[buyOrder]);
         
         NGL.transfer(msg.sender, _BOprice[buyOrder]);
         
@@ -149,13 +153,29 @@ contract NFTmarketplace is marketPlace{
     
     function createSellOrder(address SOcontract, uint256 SOid, uint256 SOprice) external override {
         IERC721 NFT = IERC721(SOcontract);
-        NFT.transferFrom(msg.sender, address(this), SOid);
+        NFT.safeTransferFrom(msg.sender, address(this), SOid);
         uint256 sellOrders = _sellOrders;
         _seller[sellOrders] = msg.sender;
         _SOcontract[sellOrders] = SOcontract;
         _SOid[sellOrders] = SOid;
         _SOprice[sellOrders] = SOprice;
         ++_sellOrders;
+    }
+    
+    function fillBuyOrder(uint256 order) external override{
+        require(!_BOprogress[order]);
+        IERC721 NFT = IERC721(_BOcontract[order]);
+        NFT.safeTransferFrom(msg.sender, _buyer[order], _BOid[order]);
+        NGL.transfer(msg.sender, _BOprice[order]);
+        _BOprogress[order] = true;
+    }
+    
+    function fillSellOrder(uint256 order) external override{
+        require(!_SOprogress[order]);
+        NGL.transferFrom(msg.sender, _seller[order], _SOprice[order]);
+        IERC721 NFT = IERC721(_SOcontract[order]);
+        NFT.safeTransferFrom(address(this), msg.sender, _SOid[order]);
+        _SOprogress[order] = true;
     }
     
     function cancelBuyOrder(uint256 order) external override {
@@ -167,10 +187,9 @@ contract NFTmarketplace is marketPlace{
     function cancelSellOrder(uint256 order) external override {
         require(!_SOprogress[order] && msg.sender == _seller[order]);
         IERC721 NFT = IERC721(_SOcontract[order]);
-        NFT.transferFrom(address(this), msg.sender, _SOid[order]);
+        NFT.safeTransferFrom(address(this), msg.sender, _SOid[order]);
         _SOprogress[order] = true;
     }
-    
 //==============================================================================================================================================================================================================  
     function rentOfferStats(uint256 offer) external view override returns(address lord, address ROcontract, uint256 ROid, uint256 ROprice, uint256 ROperiod, address ROtaker, uint256 ROblock, bool ROprogress){
         lord = _lord[offer];
@@ -185,7 +204,7 @@ contract NFTmarketplace is marketPlace{
     
     function createRentOffer(address ROcontract, uint256 ROid, uint256 ROprice, uint256 ROperiod) external override {
         IERC721 NFT = IERC721(ROcontract);
-        NFT.transferFrom(msg.sender, address(this), ROid);
+        NFT.safeTransferFrom(msg.sender, address(this), ROid);
         uint256 offers = _rentOffers;
         _lord[offers] = msg.sender;
         _ROcontract[offers] = ROcontract;
@@ -207,14 +226,14 @@ contract NFTmarketplace is marketPlace{
     function cancelRentOffer(uint256 offer) external override {
         require(!_ROprogress[offer] && msg.sender == _lord[offer]);
         IERC721 NFT = IERC721(_ROcontract[offer]);
-        NFT.transferFrom(address(this), msg.sender, _ROid[offer]);   
+        NFT.safeTransferFrom(address(this), msg.sender, _ROid[offer]);   
         _ROprogress[offer] = true;
     }
     
     function getBackNFT(uint256 offer) external override {
         require(_ROprogress[offer] && block.number - _ROblock[offer] > _ROperiod[offer]);  
         IERC721 NFT = IERC721(_ROcontract[offer]);
-        NFT.transferFrom(address(this), _lord[offer], _ROid[offer]); 
+        NFT.safeTransferFrom(address(this), _lord[offer], _ROid[offer]); 
     }
     
 //==============================================================================================================================================================================================================  
@@ -234,7 +253,7 @@ contract NFTmarketplace is marketPlace{
     
     function askForLoan(address LOcontract, uint256 LOid, uint256 LOamount, uint256 LOprepayment, uint256 LOperiod) external override {
         IERC721 NFT = IERC721(LOcontract);
-        NFT.transferFrom(msg.sender, address(this), LOid);
+        NFT.safeTransferFrom(msg.sender, address(this), LOid);
         NGL.transferFrom(msg.sender, address(this), LOprepayment);
         uint256 offers = _loanOffers;
         _borrower[offers] = msg.sender;
@@ -260,7 +279,7 @@ contract NFTmarketplace is marketPlace{
         require(msg.sender == _borrower[offer]);
         NGL.transferFrom(msg.sender, _LOinvestor[offer], _LOamount[offer]);
         IERC721 NFT = IERC721(_LOcontract[offer]);
-        NFT.transferFrom(address(this), msg.sender, _LOid[offer]);   
+        NFT.safeTransferFrom(address(this), msg.sender, _LOid[offer]);   
         _LOrepayed[offer] = true;
     }
     
@@ -268,14 +287,14 @@ contract NFTmarketplace is marketPlace{
         require(block.number - _LOblock[offer] > _LOperiod[offer]);
         require(msg.sender == _LOinvestor[offer]);
         IERC721 NFT = IERC721(_LOcontract[offer]);
-        NFT.transferFrom(address(this), msg.sender, _LOid[offer]);   
+        NFT.safeTransferFrom(address(this), msg.sender, _LOid[offer]);   
     }
     
     function cancelLoan(uint256 offer) external override {
         require(!_LOprogress[offer]);
         require(msg.sender == _borrower[offer]);
         IERC721 NFT = IERC721(_LOcontract[offer]);
-        NFT.transferFrom(address(this), msg.sender, _LOid[offer]);  
+        NFT.safeTransferFrom(address(this), msg.sender, _LOid[offer]);  
         _LOprogress[offer] = true;
     }
 }
